@@ -9,6 +9,8 @@ class Settings {
 public:
 	Settings();
 	ofxDatGui* gui;
+	ofLight directionalLight;
+	//ofLight ambientLight;
 	PanelTheme* theme;
 	void setup();
 	void update();
@@ -22,7 +24,7 @@ public:
 	ofxDatGuiButton* pauseButton;
 	ofxDatGuiButton* stopButton;
 	//frame related
-	//ofxDatGuiSlider* modelFrameNumSlider;
+	ofxDatGuiSlider* modelFrameNumSlider;
 	ofxDatGuiSlider* modelCurFrameSlider,  * modelFrameRateSlider;
 	ofxDatGuiSlider* modelNeighborNumSlider, * modelCenterIdSlider, * modelNeighborRadiusSlider;
 	//model neighbor_color&color_mixing
@@ -32,7 +34,8 @@ public:
 	/*end model setting items*/
 	ofxDatGuiFolder* lightingFolder;
 	ofxDatGuiSlider* lightRotateX, * lightRotateY, * lightRotateZ;
-	ofVec3f getLightOrientation();
+	void onLightChanged();
+	void onLightChanged(ofxDatGuiSliderEvent e);
 
 	//shortcut button
 	ofxDatGuiLabel* hintLableShot, * hintLabelCamera;

@@ -23,16 +23,7 @@ public:
 	void dragEvent(ofDragInfo dragInfo);
 	void gotMessage(ofMessage msg);
 
-	ofEasyCam mycam;
-	// light
-	//ofLight pointLight;
-	//ofLight spotLight;
-	ofLight directionalLight;
-	ofLight ambientLight;
-	//ofMaterial material;
-	//ofColor lightColor;
-	//ofColor materialColor;
-
+	ofEasyCam easy_cam;
 	Settings settings;
 	AtomModel* model;
 };

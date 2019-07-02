@@ -6,34 +6,23 @@ void ofApp::setup() {
 	settings = Settings();
 	settings.setup();
 	model = new AtomModel(&settings);
-	model->setup(50, "data/atom_data/atom_info_");
+	model->setup(5, "data/atom_data/atom_info_");
 	settings.bindEventsToModel(model);
-
-	// turn on smooth lighting //
-	ofSetSmoothLighting(true);
-
-	// Directional Lights emit light based on their orientation, regardless of their position //
-	directionalLight.setDiffuseColor(ofColor(255, 255, 255));
-	directionalLight.setSpecularColor(ofColor(255, 255, 255));
-	directionalLight.setDirectional();
-	directionalLight.setParent(mycam, true);
-
-	mycam.setDistance(model->getAxisLength() * 2);
+	settings.directionalLight.setParent(easy_cam, true);
+	easy_cam.setDistance(model->getAxisLength() * 2);
 	ofResetElapsedTimeCounter();
 }
 
 //--------------------------------------------------------------
 void ofApp::update() {
 	if (settings.gui->getMouseDown()) {
-		mycam.disableMouseInput();
+		easy_cam.disableMouseInput();
 	}
 	else {
-		mycam.enableMouseInput();
+		easy_cam.enableMouseInput();
 	}
 	model->update();
 	settings.update();
-	// dirction x-right,y-up,z-camera/depth,(0,0,0)
-	directionalLight.setOrientation(settings.getLightOrientation());
 }
 
 //--------------------------------------------------------------
@@ -43,13 +32,13 @@ void ofApp::draw() {
 
 	// enable lighting //
 	ofEnableLighting();
-	directionalLight.enable();
+	settings.directionalLight.enable();
 
-	mycam.begin();
+	easy_cam.begin();
 	model->draw();
-	mycam.end();
+	easy_cam.end();
 
-	directionalLight.disable();
+	settings.directionalLight.disable();
 	ofDisableLighting();
 	//end light and model drawing
 	ofDisableDepthTest();
@@ -67,7 +56,7 @@ void ofApp::keyPressed(int key) {
 	}
 	else if (key == ' ') {
 		ofLogNotice() << "reset camera.";
-		mycam.reset();
+		easy_cam.reset();
 	}
 }
 

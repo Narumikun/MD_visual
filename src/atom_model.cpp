@@ -6,11 +6,10 @@ AtomModel::AtomModel(Settings* s)
 	int frame_num, int center_id, int neighbor_num, int neighbor_radius,
 	int frame_rate, int color_mixing, ofColor center_color, neighbor_color,
 	bool forcefield_toggle,
-
-	bool fully_dissolved?,
 	*/
 	settings = s;
 	if (s != NULL) {
+		frame_num = s->modelFrameNumSlider->getValue();
 		center_id = s->modelCenterIdSlider->getValue();
 		neighbor_num = s->modelNeighborNumSlider->getValue();
 		neighbor_radius = s->modelNeighborRadiusSlider->getValue();
@@ -21,6 +20,7 @@ AtomModel::AtomModel(Settings* s)
 		forcefield_toggle = s->modelForceFieldToggle->getChecked();
 	}
 	else {
+		frame_num = 1;
 		center_id = 137;
 		neighbor_num = 10;
 		neighbor_radius = 20;
@@ -37,54 +37,23 @@ void AtomModel::loadData(int frames, string prefix)
 	// all filepaths must be absolute or relative to bin/MD_visual_debug.exe
 	// please save data files to "bin/data/", not project root. And don't include them in project.
 	ofLogNotice() << "Ready to read " << frames << " frames with prefix " << prefix;
-	//int old_len = model_frames.size();
-	//int frame_no = -1;
-	//while (true) {
-	//	frame_no += 1;
-	//	char fp[100];
-	//	sprintf_s(fp, "%03d.json", frame_no);
-	//	string filepath = prefix + string(fp);
-	//	if (filesystem::exists(filepath)) {
-	//		if (frame_no < frames) {
-	//			if (frame_no < old_len) {
-	//				if (prefix == path_prefix) {
-	//					//already read, skip.
-	//					continue;
-	//				}
-	//				else {
-	//					// different path, update new Atom3D
-	//					ofLogNotice() << "loading json: " << filepath;
-	//					model_frames[frame_no] = Atom3D(filepath);
-	//				}
-	//			}
-	//			else {
-	//				// append the larger index items
-	//				ofLogNotice() << "loading json: " << filepath;
-	//				model_frames.push_back(Atom3D(filepath));
-	//			}
-	//		}
-	//	}
-	//	else {
-	//		ofLogNotice() << filepath << " File not exist! stop reading!";
-	//		break;
-	//	}
-	//}
-	atom3d.load_data(prefix, frames);
-	int frame_no = atom3d.frames;
-
-	// update parameters
-	frame_num = min(frame_no, frames);
-	ofLogNotice() << "Load " << frame_num << " frames";
-	//cout << "Load " << frame_num << " frames" << endl;
+	
+	int max_frame_num = atom3d.loadData(prefix, frames);
+	frame_num = atom3d.frame_num;
 	updateNeighbors(center_id, neighbor_radius);
 	path_prefix = prefix;
 	if (atom3d.group_map.count(center_id) == 0) {
+		// ensure the validation of center_id
 		center_id = atom3d.group_map.begin()->first;
 	}
-	//check max frame amount
-	max_frame_num = frame_no;
-	ofLogNotice() << "Total " << max_frame_num << " frames exist.";
+	settings->modelFrameNumSlider->setMax(max_frame_num);
+	settings->modelFrameNumSlider->setValue(frame_num,false);
 	settings->modelCurFrameSlider->setMax(frame_num);
+	cur_frame = min(frame_num - 1, cur_frame);// ensure the validation, otherwise error when draw before update?
+	settings->modelCurFrameSlider->setValue(cur_frame + 1);
+
+	ofLogNotice() << "Load " << frame_num << " frames";
+	ofLogNotice() << "Total " << max_frame_num << " frames exist.";
 }
 
 void AtomModel::setup(int frames, string prefix)
@@ -97,26 +66,25 @@ void AtomModel::setup(int frames, string prefix)
 	for (int i = 0; i < max_neighbors; i++) {
 		atom3d.group_map[frames_neighbor_id[cur_frame][i]]->update(cur_frame);
 	}
-	atom3d.setup_particle(cur_frame, center_id, frames_neighbor_id[cur_frame], neighbor_num);
+	atom3d.setupParticle(cur_frame, center_id, frames_neighbor_id[cur_frame], neighbor_num);
 }
 
 void AtomModel::update()
 {
-	//cout << "update AtomModel... cur_frame=" << cur_frame << endl;
 	if (playing) {
 		cur_frame = (ofGetElapsedTimeMicros() / (1000000 / frame_rate) + init_frame) % frame_num;
+	}
+	else {
+		cur_frame = init_frame % frame_num;
 	}
 	// only update when current frame changed
 	if (cur_frame != last_frame || draw_neighbor_changed) {
 		axis.update(atom3d.axis_length[cur_frame]);
 		atom3d.group_map[center_id]->update(cur_frame);
 		int max_neighbors = min(int(frames_neighbor_id[cur_frame].size()), neighbor_num);
-		//cout << "update: ";
 		for (int i = 0; i < max_neighbors; i++) {
-			//cout << frames_neighbor_id[cur_frame][i] << "  ";
 			atom3d.group_map[frames_neighbor_id[cur_frame][i]]->update(cur_frame);
 		}
-		//cout << endl;
 		last_frame = cur_frame;
 		draw_neighbor_changed = false;
 
@@ -127,31 +95,26 @@ void AtomModel::update()
 	}
 	//when show forcefield, it should always be drawn even if paused,
 	if (forcefield_toggle) {
-		if (frc_neighbor_changed) {
-			atom3d.setup_particle(cur_frame, center_id, frames_neighbor_id[cur_frame], neighbor_num);
-			frc_neighbor_changed = false;
+		if (forcefield_changed) {
+			atom3d.setupParticle(cur_frame, center_id, frames_neighbor_id[cur_frame], neighbor_num);
+			forcefield_changed = false;
 		}
-		atom3d.update_particle();
+		atom3d.updateParticle();
 	}
 }
 
 void AtomModel::draw() {
-	//cout << "AtomModel drawing: cur_frame=" << cur_frame << endl;
 	axis.draw();
 	// here you will draw your object
 	atom3d.group_map[center_id]->draw(cur_frame, ofColor(center_color, color_mixing));
 	int max_neighbors = min(int(frames_neighbor_id[cur_frame].size()), neighbor_num);
-	//cout << "draw: ";
 	for (int i = 0; i < max_neighbors; i++) {
-		//cout << frames_neighbor_id[cur_frame][i]<<"  ";
 		atom3d.group_map[frames_neighbor_id[cur_frame][i]]->draw(cur_frame, ofColor(neighbor_color, color_mixing));
 	}
-	//cout << endl;
 
 	//draw particle system
 	if (forcefield_toggle && !playing) {
-		//cout << "drawing particles" << endl;
-		atom3d.draw_particle();
+		atom3d.drawParticle();
 	}
 }
 
@@ -162,27 +125,15 @@ void AtomModel::updateNeighbors(int _center_id, float _radius)
 	}
 	frames_neighbor_id.clear();
 	for (int i = 0; i < frame_num; i++) {
-		frames_neighbor_id.push_back(atom3d.get_neighbor_group_id(_center_id, _radius));
+		frames_neighbor_id.push_back(atom3d.getNeighborGroupId(_center_id, _radius));
 	}
-	frc_neighbor_changed = true;
+	forcefield_changed = true;
 	draw_neighbor_changed = true;
-}
-
-void AtomModel::updateParams(int frame_rate_new, int opacity_new)
-{
-	//not used yet
-	// color_mixing = 0 ~ 255
-	if (frame_rate_new > 0) {
-		frame_rate = frame_rate_new;
-	}
-	if (opacity_new >= 0) {
-		color_mixing = opacity_new;
-	}
 }
 
 float AtomModel::getAxisLength()
 {
-	if (atom3d.frames > 0) {
+	if (atom3d.frame_num > 0) {
 		return atom3d.axis_length[0];
 	}
 	else {
@@ -219,35 +170,40 @@ void AtomModel::onStopButton(ofxDatGuiButtonEvent e)
 
 void AtomModel::onCurFrameSlider(ofxDatGuiSliderEvent e)
 {
-	// cur_frame = e.target->getValue();
-	init_frame = e.target->getValue();
+	init_frame = int(e.target->getValue() - 1) % frame_num;
 	ofResetElapsedTimeCounter();
+	forcefield_changed = true;
+	draw_neighbor_changed = true;
 	ofLogNotice() << "onCurFrameSlider called: " << e.target->getValue();
 }
 
-//void AtomModel::onFrameNumSlider(ofxDatGuiSliderEvent e)
-//{
-//	loadData(int(e.target->getValue()), path_prefix);
-//	settings->modelCurFrameSlider->setMax(frame_num);
-//	ofLogNotice() << "Frame num slider: set cur frame max to " << frame_num;
-//}
+void AtomModel::onFrameNumSlider(ofxDatGuiSliderEvent e)
+{
+	if (playing) {
+		// load data need more time, so pause first if playing
+		onPauseButton();
+		loadData(int(e.target->getValue()), path_prefix);
+		onPlayButton();
+	}
+	else {
+		loadData(int(e.target->getValue()), path_prefix);
+	}
+	//ofLogNotice() << "Frame num slider: set cur frame max to " << frame_num;
+}
 
 void AtomModel::onCenterIdSlider(ofxDatGuiSliderEvent e)
 {
 	int id = e.target->getValue();
 	if (cur_frame >= 0) {
 		if (atom3d.group_map.count(id) == 1) {
-			onPauseButton();
 			center_id = id;
+			last_frame = -1; 
 			updateNeighbors(center_id, neighbor_radius);
-			onPlayButton();
-			//cout << "center_id changed, set cur_frame " << cur_frame << " to -1." << endl;
-			//cur_frame = -1;
 		}
 		else if (center_id >= 0) {
 			// has been set before
 			e.target->setValue(center_id);
-			ofLogNotice() << "reset center_id from " << id << " to " << center_id << endl;
+			ofLogNotice() << " center_id invalid, reset from " << id << " to " << center_id << endl;
 		}
 	}
 }
@@ -271,6 +227,8 @@ void AtomModel::onNeighborRadiusSlider(ofxDatGuiSliderEvent e)
 void AtomModel::onFrameRateSlider(ofxDatGuiSliderEvent e)
 {
 	frame_rate = e.target->getValue();
+	init_frame = cur_frame;
+	ofResetElapsedTimeCounter();
 	ofLogNotice() << "Model frame rate: " << frame_rate;
 }
 

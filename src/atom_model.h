@@ -12,7 +12,6 @@ public:
 	void setup(int frames, string path_prefix = "data/atom_data/atom_info_");
 	void loadData(int frames, string path_prefix = "data/atom_data/atom_info_");
 	void updateNeighbors(int center_id, float radius = -1.);
-	void updateParams(int fr = -1, int opacity = -1);
 	void draw();
 	void update();
 	float getAxisLength();
@@ -21,7 +20,7 @@ public:
 	vector<vector<int>> frames_neighbor_id;
 private:
 	//neighbor changed, used for force cal
-	bool frc_neighbor_changed = true;
+	bool forcefield_changed = true;
 	bool draw_neighbor_changed = true;
 
 	//TODO: make neighbor_num ,colors and neighbor R tunable.
@@ -35,8 +34,8 @@ private:
 	void onCurFrameSlider(ofxDatGuiSliderEvent e);
 	// setting model params
 	//max_frame_num denpends on valid frame file amount
-	int  frame_num = 5, max_frame_num = 5;
-	//void onFrameNumSlider(ofxDatGuiSliderEvent e);
+	int  frame_num = 5;// , max_frame_num = 5;
+	void onFrameNumSlider(ofxDatGuiSliderEvent e);
 	int frame_rate;
 	void onFrameRateSlider(ofxDatGuiSliderEvent e);
 	int center_id = 0;    //50 Ph  100 TO

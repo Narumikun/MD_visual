@@ -39,7 +39,7 @@ AtomGroup::~AtomGroup() {
 };
 
 
-void AtomGroup::append_atom(Atom* _atom) {
+void AtomGroup::appendAtomToGroup(Atom* _atom) {
 	if (this->atom_map.count(_atom->id)) {
 		throw "Atom already exist!";
 	}
@@ -56,7 +56,7 @@ void AtomGroup::update(int frame_no) {
 	ofVec3f max_co = { 0.,0.,0. };
 	ofVec3f dif = { 0.,0.,0. };
 	for (auto map_it = this->atom_map.begin(); map_it != this->atom_map.end(); map_it++) {
-		dif = map_it->second->coordinate[frame_no] - get_center(frame_no);
+		dif = map_it->second->coordinate[frame_no] - getCenter(frame_no);
 		for (int i = 0; i < 3; i++) {
 			if (fabs(dif[i]) > max_co[i])
 				max_co = ofVec3f(fabs(dif[i]));
@@ -68,7 +68,7 @@ void AtomGroup::update(int frame_no) {
 	vector<ofPoint> centers;
 	for (auto map_it = this->atom_map.begin(); map_it != this->atom_map.end(); map_it++) {
 		if (map_it->second->element != "H") {
-			centers.push_back((map_it->second->coordinate[frame_no] - get_center(frame_no) + max_co) / iso_scale);
+			centers.push_back((map_it->second->coordinate[frame_no] - getCenter(frame_no) + max_co) / iso_scale);
 			//cout << (map_it->second.coordinate - min_co) / iso_scale << endl;
 		}
 	}
@@ -119,13 +119,13 @@ void AtomGroup::draw(int frame_no, ofColor color) {
 
 
 	ofPushMatrix();
-	ofTranslate(get_center(frame_no));
+	ofTranslate(getCenter(frame_no));
 	ofScale(iso_scale);
 	iso.draw(color);
 	ofPopMatrix();
 }
 
-ofVec3f AtomGroup::get_center(int frame_no) {
+ofVec3f AtomGroup::getCenter(int frame_no) {
 	if (this->cal_center[frame_no] == false) {
 		ofVec3f _center = ofVec3f(0., 0., 0.);
 		for (auto map_it = this->atom_map.begin(); map_it != this->atom_map.end(); map_it++) {
@@ -144,123 +144,89 @@ Atom3D::~Atom3D() {
 	}
 };
 
-void Atom3D::setup(string prefix) {
-	int frame_no = 0;
-	char buf[100];
-	sprintf_s(buf, "%03d.json", frame_no);
-	string filepath = prefix + string(buf);
-	ofJson atom_info;
-	if (!std::filesystem::exists(filepath)) {
-		ofLogNotice() << "file not exist: " << filepath;
-		throw filepath;
+int Atom3D::loadData(string prefix, int frames) {
+	int old_len = frame_num;
+	if (frame_num > 0) {
+		old_len = group_map.begin()->second->atom_map.begin()->second->coordinate.size();
 	}
-	else {
-		ifstream in_file(filepath);
-		in_file >> atom_info;
-		cout << " *loading frame 0...";
-		//ofLogNotice() << "file loaded: " << fp;
-	}
-	axis_length.push_back(atom_info["length"]);
-	for (ofJson::iterator it = atom_info.begin(); it != atom_info.end(); ++it) {
-		if (it.key() != "length") {
-			ofJson atm_json = it.value();
-			Atom* p_atm = NULL;
-			p_atm = new Atom(atm_json, axis_length[0]);
-			append_atom(p_atm);
-			//Atom new_atom(atm_json, axis_length[0]);
-			//append_atom(new_atom);
-		}
-	}
-	this->frames = 1;
-};
-
-void Atom3D::update(string prefix, int frames) {
-	if (frames > this->frames) {
-		int frame_no = this->frames;
-		for (frame_no; frame_no < frames; frame_no++) {
-			char buf[100];
-			sprintf_s(buf, "%03d.json", frame_no);
-			string filepath = prefix + string(buf);
-			ofJson atom_info;
-			if (std::filesystem::exists(filepath)) {
+	int frame_no = -1;
+	while (true) {
+		frame_no += 1; // now start from 0,
+		char fp[100];
+		sprintf_s(fp, "%03d.json", frame_no);
+		string filepath = prefix + string(fp);
+		if (filesystem::exists(filepath)) {
+			if (frame_no < old_len || frame_no >= frames) {
+				// if already read, or frame_no is larger than frames need to read.
+				continue;
+			}
+			else {
+				ofJson atom_info;
 				ifstream in_file(filepath);
 				in_file >> atom_info;
-				cout << "\r *loading frame " << frame_no << "...";
-				//ofLogNotice() << "file loaded: " << fp;
+				cout << "**loading frame data \"" << filepath << "\"..." << endl;
 				axis_length.push_back(atom_info["length"]);
 				for (ofJson::iterator it = atom_info.begin(); it != atom_info.end(); ++it) {
 					if (it.key() != "length") {
 						ofJson atm_json = it.value();
-						int id = atm_json["id"], group_id = atm_json["group_id"];
-						group_map[group_id]->atom_map[id]->update(atm_json, axis_length[frame_no]);
+						if (frame_no == 0) {
+							// load the entire Atom data
+							Atom* p_atm = NULL;
+							p_atm = new Atom(atm_json, axis_length[0]);
+							appendAtomTo3D(p_atm);
+						}
+						else {
+							// only append coordinate data
+							int id = atm_json["id"], group_id = atm_json["group_id"];
+							group_map[group_id]->atom_map[id]->update(atm_json, axis_length[frame_no]);
+						}
 					}
 				}
 			}
-			else {
-				ofLogNotice() << filepath << " File not exist! stop reading!";
-				break;
-			}
 		}
-		this->frames = frame_no;
+		else {
+			ofLogNotice() << filepath << " File not exist! stop reading!";
+			// frame_no now is max data file amount
+			break;
+		}
 	}
-};
-
-void Atom3D::load_data(string prefix, int frames) {
-	if (this->frames == 0)
-		setup(prefix);
-	update(prefix, frames);
+	max_frame_num = frame_no;
+	frame_num = min(max_frame_num, frames);
+	return max_frame_num;// max frame amount
 };
 
 // Atom3D contains all the atom groups for one frame
-void Atom3D::append_atom(Atom* _atom) {
+void Atom3D::appendAtomTo3D(Atom* _atom) {
 	if (this->group_map.count(_atom->group_id)) {
-		// test
-		//group_map[_atom.group_id].append_atom(_atom);
-		group_map[_atom->group_id]->append_atom(_atom);
+		group_map[_atom->group_id]->appendAtomToGroup(_atom);
 	}
 	else {
 		//ofLogNotice() << "new atom group id=" << _atom.group_id;
-
-		// test
-		//AtomGroup new_group(_atom.group_id, _atom.mole_id, _atom.group_type);
-		//new_group.append_atom(_atom);
-		//group_map.insert(make_pair(_atom.group_id, new_group));
-
 		AtomGroup* agp = NULL;
 		agp = new AtomGroup(_atom->group_id, _atom->mole_id, _atom->group_type);
-		agp->append_atom(_atom);
+		agp->appendAtomToGroup(_atom);
 		group_map.insert(make_pair(_atom->group_id, agp));
-
-
 		max_group_id = max(max_group_id, _atom->group_id);
 	}
 }
 
-vector<int> Atom3D::get_neighbor_group_id(const int center_group_id, float r, int cur_frame) {
-	
-	// test
-	//AtomGroup& c_grp = this->group_map[center_group_id];
+vector<int> Atom3D::getNeighborGroupId(const int center_group_id, float r, int cur_frame) {
 	AtomGroup* c_grp = this->group_map[center_group_id];
-
 	vector<float> distance;
 	vector<int> arg_vec;
 	for (auto it = this->group_map.begin(); it != this->group_map.end(); it++) {
-		//if ((it->first != center_group_id) && (it->second.mole_id != c_grp.mole_id)) {
 		if (it->first != center_group_id) {
-			// test
-			//float _d = c_grp.get_center(cur_frame).distance(it->second.get_center(cur_frame));
-			float _d = c_grp->get_center(cur_frame).distance(it->second->get_center(cur_frame));
-			
+			float _d = c_grp->getCenter(cur_frame).distance(it->second->getCenter(cur_frame));
 			if (_d < r) {
 				distance.push_back(_d);
 				arg_vec.push_back(it->first);
 			}
 		}
 	}
-	return _arg_sort(distance, arg_vec);
+	return _argSort(distance, arg_vec);
 }
 
-vector<int> Atom3D::_arg_sort(vector<float> ivec, vector<int> arg_vec) {
+vector<int> Atom3D::_argSort(vector<float> ivec, vector<int> arg_vec) {
 	const int COUNT = ivec.size();
 	for (int i = 1; i < COUNT; i++) {
 		for (int j = 0; j < COUNT - i; j++) {
@@ -273,13 +239,11 @@ vector<int> Atom3D::_arg_sort(vector<float> ivec, vector<int> arg_vec) {
 	return arg_vec;
 }
 
-void Atom3D::setup_particle(int cur_frame, int cent_id, vector<int> neighbor_id, int neighbor_num) {
+void Atom3D::setupParticle(int cur_frame, int cent_id, vector<int> neighbor_id, int neighbor_num) {
 	if (_draw_particle) {
 		/*cout << neighbor_id.size() << endl;*/
 		// update atom coordinate
 		ps.clear();
-		// test
-		//AtomGroup& ct_grp = group_map[cent_id];
 		AtomGroup* ct_grp = group_map[cent_id];
 		int atom_num = 0;
 		for (auto c_it = ct_grp->atom_map.begin(); c_it != ct_grp->atom_map.end(); c_it++) {
@@ -295,7 +259,7 @@ void Atom3D::setup_particle(int cur_frame, int cent_id, vector<int> neighbor_id,
 						float distance = c_atm->coordinate[cur_frame].distance(n_atm->coordinate[cur_frame]);
 						if (distance > 6.) {
 							ofVec3f direction = (c_atm->coordinate[cur_frame] - n_atm->coordinate[cur_frame]).normalize();
-							force += direction * cal_frc(c_atm, n_atm, cur_frame);
+							force += direction * calForce(c_atm, n_atm, cur_frame);
 						}
 					}
 				}
@@ -307,7 +271,7 @@ void Atom3D::setup_particle(int cur_frame, int cent_id, vector<int> neighbor_id,
 	}
 };
 
-void Atom3D::update_particle() {
+void Atom3D::updateParticle() {
 	if (_draw_particle) {
 		for (int i = 0; i < ps.size(); i++) {
 			ps.at(i)->update();
@@ -316,7 +280,7 @@ void Atom3D::update_particle() {
 	}
 };
 
-void Atom3D::draw_particle() {
+void Atom3D::drawParticle() {
 	if (_draw_particle) {
 		for (int i = 0; i < ps.size(); i++) {
 			ps.at(i)->display();
@@ -324,7 +288,7 @@ void Atom3D::draw_particle() {
 	}
 };
 
-float Atom3D::cal_vdw(const Atom* atom1, const Atom* atom2, float r) {
+float Atom3D::calVdw(const Atom* atom1, const Atom* atom2, float r) {
 	float r_i = atom1->f_r, r_j = atom2->f_r;
 	float f_v = 0.;
 	if (r < 9.5) {
@@ -335,7 +299,7 @@ float Atom3D::cal_vdw(const Atom* atom1, const Atom* atom2, float r) {
 	return f_v;
 }
 
-float Atom3D::cal_elec(const Atom* atom1, const Atom* atom2, float r) {
+float Atom3D::calElec(const Atom* atom1, const Atom* atom2, float r) {
 	float f_e = 0.;
 	if (r < 9.5) {
 		f_e = atom1->charge * atom2->charge / r / r;
@@ -343,9 +307,9 @@ float Atom3D::cal_elec(const Atom* atom1, const Atom* atom2, float r) {
 	return f_e;
 }
 
-float Atom3D::cal_frc(const Atom* atom1, const Atom* atom2, int frame_no) {
+float Atom3D::calForce(const Atom* atom1, const Atom* atom2, int frame_no) {
 	float r = atom1->coordinate[frame_no].distance(atom2->coordinate[frame_no]);
-	return cal_vdw(atom1, atom2, r) + cal_elec(atom1, atom2, r);
+	return calVdw(atom1, atom2, r) + calElec(atom1, atom2, r);
 }
 
 // Axis implement, can use ofbox instead

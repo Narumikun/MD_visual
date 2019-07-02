@@ -9,10 +9,17 @@ Settings::Settings() {
 	gui = new ofxDatGui();
 }
 void Settings::setup() {
+	//light
+	// Directional Lights emit light based on their orientation, regardless of their position 
+	ofSetSmoothLighting(true);
+	directionalLight.setDiffuseColor(ofColor(255, 255, 255));
+	directionalLight.setSpecularColor(ofColor(255, 255, 255));
+	directionalLight.setDirectional();
+	//panel
 	theme = new PanelTheme();
 	theme->setScale(1.3);
 	gui->setAutoDraw(false);
-	
+
 	//header and footer
 	gui->addHeader("Setting Panel");
 	gui->addFooter();
@@ -30,11 +37,12 @@ void Settings::setup() {
 	//model settings:: frame num/current/rate/, neighbor_color, neighbor_num, cent_id
 	modelFolder = gui->addFolder("Model Settings", ofColor::green);
 	//frame related
-	//modelFrameNumSlider = modelFolder->addSlider("  Frames", 1, 20, 5);
-	//modelFrameNumSlider->setPrecision(0);
-	modelCurFrameSlider = modelFolder->addSlider("  Current frame", 0, 0, 0);
+	modelFrameNumSlider = modelFolder->addSlider("  Frame num", 1, 20, 5);
+	modelFrameNumSlider->setPrecision(0);
+	// cur_frame from 0~max-1 in program, and from 1~max in UI.
+	modelCurFrameSlider = modelFolder->addSlider("  Current frame", 1, 1, 1);
 	modelCurFrameSlider->setPrecision(0);
-	modelFrameRateSlider = modelFolder->addSlider("  Model FR", 1, 25, 1);
+	modelFrameRateSlider = modelFolder->addSlider("  Model FR", 1, 25, 3);
 	modelFrameRateSlider->setPrecision(0);
 	//center/neighbor group related
 	modelCenterIdSlider = modelFolder->addSlider("  Center id", 0, 250, 137);
@@ -45,7 +53,6 @@ void Settings::setup() {
 	modelNeighborRadiusSlider->setPrecision(1);
 	modelForceFieldToggle = modelFolder->addToggle("  Show force field");
 	// change for Opacity to Color mixing
-	//modelColorMixingSlider = modelFolder->addSlider("  Opacity", 0, 255, 255);
 	modelColorMixingSlider = modelFolder->addSlider("  Color mixing", 0, 255, 20);
 	modelColorMixingSlider->setPrecision(0);
 	modelCenterColorPicker = modelFolder->addColorPicker("  Center color", ofColor(148, 0, 211));
@@ -53,14 +60,18 @@ void Settings::setup() {
 
 	modelFolder->expand();
 	gui->addBreak();
-	
+
 	//light controls
 	lightingFolder = gui->addFolder("Lighting", ofColor::yellow);
 	lightRotateX = lightingFolder->addSlider("  Theta x", -180, 180, -130);
 	lightRotateY = lightingFolder->addSlider("  Theta y", -180, 180, 60);
 	lightRotateZ = lightingFolder->addSlider("  Theta z", -180, 180, 30);
+	lightRotateX->onSliderEvent(this, &Settings::onLightChanged);
+	lightRotateY->onSliderEvent(this, &Settings::onLightChanged);
+	lightRotateZ->onSliderEvent(this, &Settings::onLightChanged);
+	onLightChanged();
 	gui->addBreak();
-	
+
 	//information board
 	infoBoard = gui->addFolder("Panel Settings", ofColor::gray);
 	//frame rate
@@ -97,7 +108,7 @@ void Settings::bindEventsToModel(AtomModel* model)
 	stopButton->onButtonEvent(model, &AtomModel::onStopButton);
 
 	// todo load data.
-	//modelFrameNumSlider->onSliderEvent(model, &AtomModel::onFrameNumSlider);
+	modelFrameNumSlider->onSliderEvent(model, &AtomModel::onFrameNumSlider);
 	modelCurFrameSlider->onSliderEvent(model, &AtomModel::onCurFrameSlider);
 	modelNeighborNumSlider->onSliderEvent(model, &AtomModel::onNeighborNumSlider);
 	modelCenterIdSlider->onSliderEvent(model, &AtomModel::onCenterIdSlider);
@@ -110,11 +121,12 @@ void Settings::bindEventsToModel(AtomModel* model)
 	//update panel like slider max value
 	//modelFrameNumSlider->setMax(model->max_frame_num);
 }
-
-
-ofVec3f Settings::getLightOrientation()
-{
-	return ofVec3f(lightRotateX->getValue(), lightRotateY->getValue(), lightRotateZ->getValue());
+void Settings::onLightChanged() {
+	ofVec3f vec = ofVec3f(lightRotateX->getValue(), lightRotateY->getValue(), lightRotateZ->getValue());
+	directionalLight.setOrientation(vec);
+}
+void Settings::onLightChanged(ofxDatGuiSliderEvent e) {
+	onLightChanged();
 }
 
 void Settings::onSliderEvent(ofxDatGuiSliderEvent e)
